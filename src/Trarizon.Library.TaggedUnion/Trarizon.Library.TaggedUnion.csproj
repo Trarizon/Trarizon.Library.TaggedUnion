@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<LangVersion>12</LangVersion>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	</PropertyGroup>
+
+	<Import Project="..\..\Nuget.props"/>
+	
+	<ItemGroup>
+		<None Include="..\Trarizon.Library.TaggedUnion.SourceGenerator\bin\$(Configuration)\netstandard2.0\Trarizon.Library.TaggedUnion.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+	</ItemGroup>
+
+</Project>

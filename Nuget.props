@@ -1,0 +1,13 @@
+<Project>
+
+	<PropertyGroup Label="NugetProperties">
+		<Title>Trarizon.Library.TaggedUnion</Title>
+		<Authors>Trarizon</Authors>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/Trarizon/Trarizon.Library.TaggedUnion</RepositoryUrl>
+		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<AssemblyVersion>0.0.1</AssemblyVersion>
+		<Version>$(AssemblyVersion)</Version>
+		<FileVersion>$(AssemblyVersion)</FileVersion>
+	</PropertyGroup>
+</Project>

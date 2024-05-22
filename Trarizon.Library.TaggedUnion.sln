@@ -1,0 +1,45 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34723.18
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Trarizon.Library.TaggedUnion", "src\Trarizon.Library.TaggedUnion\Trarizon.Library.TaggedUnion.csproj", "{08D0BB4C-BD43-4412-9A5F-8249AA11779A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Trarizon.Library.TaggedUnion.SourceGenerator", "src\Trarizon.Library.TaggedUnion.SourceGenerator\Trarizon.Library.TaggedUnion.SourceGenerator.csproj", "{858595F1-1E5C-40C4-A449-2FB829998485}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项", "解决方案项", "{17BDC5A7-348D-44FD-B663-A2C678B6C15F}"
+	ProjectSection(SolutionItems) = preProject
+		design.md = design.md
+		LICENSE = LICENSE
+		Nuget.props = Nuget.props
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Trarizon.Library.TaggedUnion.Test", "tests\Trarizon.Library.TaggedUnion.Test\Trarizon.Library.TaggedUnion.Test.csproj", "{3FCB2A22-8E68-474A-819D-1C14653C7358}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{08D0BB4C-BD43-4412-9A5F-8249AA11779A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08D0BB4C-BD43-4412-9A5F-8249AA11779A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08D0BB4C-BD43-4412-9A5F-8249AA11779A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08D0BB4C-BD43-4412-9A5F-8249AA11779A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{858595F1-1E5C-40C4-A449-2FB829998485}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{858595F1-1E5C-40C4-A449-2FB829998485}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{858595F1-1E5C-40C4-A449-2FB829998485}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{858595F1-1E5C-40C4-A449-2FB829998485}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3FCB2A22-8E68-474A-819D-1C14653C7358}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3FCB2A22-8E68-474A-819D-1C14653C7358}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3FCB2A22-8E68-474A-819D-1C14653C7358}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3FCB2A22-8E68-474A-819D-1C14653C7358}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B9072993-8214-48F4-B5E0-799CADC71DB9}
+	EndGlobalSection
+EndGlobal

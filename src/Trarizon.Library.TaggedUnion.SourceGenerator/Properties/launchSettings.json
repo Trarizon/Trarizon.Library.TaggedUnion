@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Test Generator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\..\\tests\\Trarizon.Library.TaggedUnion.Test\\Trarizon.Library.TaggedUnion.Test.csproj"
+    }
+  }
+}
