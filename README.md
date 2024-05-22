@@ -60,7 +60,7 @@ public partial struct SomeEnumUnion
 
 #region A
 
-    public static SomeEnumUnion New_A() => new(SomeEnum.A);_
+    public static SomeEnumUnion New_A() => new(SomeEnum.A);
 
     public bool TryGet_A()
     {
@@ -145,7 +145,7 @@ Can optional generate More methods:
 For `SomeEnum.C`, generates
 
 ``` csharp
-[UnscopedRef] public C_Ref => new(ref this);
+[UnscopedRef] public C_View C_Ref => new(ref this);
 
 public readonly ref partial struct C_View(ref SomeEnumUnion union)
 {
