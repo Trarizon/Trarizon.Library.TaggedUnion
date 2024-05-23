@@ -64,7 +64,7 @@ internal static class EnumerableExtensions
     public static IEnumerable<T> OfNotNull<T>(this IEnumerable<T?> source) where T : class
     {
         foreach (var item in source) {
-            if(item is not null)
+            if (item is not null)
                 yield return item;
         }
     }
@@ -76,6 +76,19 @@ internal static class EnumerableExtensions
                 yield return t;
             else
                 yield break;
+        }
+    }
+
+    public static IEnumerable<TResult> SelectFirstSpecialized<T, TResult>(this IEnumerable<T> source, Func<T, TResult> firstSelector,Func<T,TResult> restSelector)
+    {
+        using var enumerator = source.GetEnumerator();
+        if (!enumerator.MoveNext())
+            yield break;
+
+        yield return firstSelector(enumerator.Current);
+
+        while (enumerator.MoveNext()) {
+            yield return restSelector(enumerator.Current);
         }
     }
 

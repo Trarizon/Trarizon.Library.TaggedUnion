@@ -2,7 +2,7 @@
 
 namespace Trarizon.Library.TaggedUnion.SourceGenerator.Core.Mirror;
 [Flags]
-public enum TaggedUnionGenerationOptions
+internal enum TaggedUnionGenerationOptions
 {
     /// <summary>
     /// No extra options
@@ -21,4 +21,8 @@ public enum TaggedUnionGenerationOptions
     /// Implements monad match functions
     /// </summary>
     Match = 1 << 2,
+    /// <summary>
+    /// Implements operator==, Equals(), GetHashCode(), <see cref="IEquatable{T}"/>
+    /// </summary>
+    EqualityComparison = 1 << 3,
 }

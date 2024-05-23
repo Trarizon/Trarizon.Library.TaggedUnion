@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Trarizon.Library.TaggedUnion.SourceGenerator.Core.Mirror;
 using Trarizon.Library.TaggedUnion.SourceGenerator.Utilities;
 
 namespace Trarizon.Library.TaggedUnion.SourceGenerator.Core;
@@ -10,6 +11,10 @@ internal unsafe sealed record Variant(
     IReadOnlyList<VariantField> Fields)
 {
     public required int UnmanagedFieldCount { get; init; }
+
+    public CreatorAccessibility CreatorAccessibility { get; init; }
+
+    // Lazy Properties
 
     private string? __parameterListString;
     public string ParameterListString => __parameterListString ??= string.Join(", ", Fields.Select(field => $"{field.Type.ToFullQualifiedDisplayString()} {field.Name}"));

@@ -32,4 +32,14 @@ public enum TaggedUnionGenerationOptions
     /// Implements monad match functions
     /// </summary>
     Match = 1 << 2,
+#if NET7_0_OR_GREATER
+    /// <summary>
+    /// Implements GetHashCode(), <see cref="IEquatable{T}"/>, <see cref="System.Numerics.IEqualityOperators{TSelf, TOther, TResult}"/>
+    /// </summary>
+#else
+    /// <summary>
+    /// Implements operator==, GetHashCode(), <see cref="IEquatable{T}"/>
+    /// </summary>
+#endif
+    EqualityComparison = 1 << 3,
 }

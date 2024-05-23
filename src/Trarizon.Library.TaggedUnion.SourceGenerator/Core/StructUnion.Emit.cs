@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.IO;
@@ -40,9 +41,23 @@ partial record StructUnion : IUnion
             // Type
             var modifiers = Modifiers is null ? "" : $"{Modifiers} ";
             writer.WriteLine($"{modifiers}partial struct {TypeName}");
-            if (GenerationOptions.HasFlag(TaggedUnionGenerationOptions.IDisposable)) {
-                writer.WriteLine($"    : global::{Literals.IDisposable_TypeName}");
+
+            using (writer.Indent()) {
+                char c = ':';
+                if (GenerationOptions.HasFlag(TaggedUnionGenerationOptions.IDisposable)) {
+                    writer.WriteLine($"{c} global::{Literals.IDisposable_TypeName}");
+                    c = ',';
+                }
+                if (GenerationOptions.HasFlag(TaggedUnionGenerationOptions.EqualityComparison)) {
+                    writer.WriteLine($"{c} global::{Literals.IEquatable_TypeName}<{TypeNameFullQualified}>");
+                    writer.WriteLineNoTabs($"#if NET7_0_OR_GREATER");
+                    writer.WriteLine($", global::{Literals.IEqualityOperators_TypeName}<{TypeNameFullQualified}, {TypeNameFullQualified}, bool>");
+                    writer.WriteLineNoTabs($"#endif");
+                    c = ',';
+                }
             }
+
+            // Body
             writer.WriteLine("{");
             idt.Indent("}");
 
@@ -67,6 +82,11 @@ partial record StructUnion : IUnion
             if (GenerationOptions.HasFlag(TaggedUnionGenerationOptions.Match)) {
                 writer.WriteLine();
                 EmitMatchMethods(writer);
+            }
+
+            if (GenerationOptions.HasFlag(TaggedUnionGenerationOptions.EqualityComparison)) {
+                writer.WriteLine();
+                EmitEqualityComparisonMethods(writer);
             }
         }
     }
@@ -103,7 +123,14 @@ partial record StructUnion : IUnion
     private void EmitConstructor(IndentedTextWriter writer)
     {
         writer.WriteLine($"#pragma warning disable CS8618");
-        writer.WriteLine($"private {TypeName}({TagTypeFullQualifiedName} tag) {{ __tag = tag; }}");
+        writer.WriteLine($"private {TypeName}({TagTypeFullQualifiedName} tag)");
+        writer.WriteLine("{");
+        using (writer.Indent("}")) {
+            writer.WriteLine($"this.__tag = tag;");
+            if (ContainsUnmanaged) {
+                writer.WriteLine($"global::{Literals.Unsafe_SkipInit_MethodName}(out this.__unmanageds);");
+            }
+        }
         writer.WriteLine($"#pragma warning restore CS8618");
     }
 
@@ -120,18 +147,8 @@ partial record StructUnion : IUnion
         using (writer.Indent("}")) {
             int i = 0;
             foreach (var variant in Variants) {
-                // TODO: this switch is copied from EmitVariant, 
-                // maybe we shoul cache it somewhere to do optimization
-                string? unmanagedTupleTypeName = variant.UnmanagedFieldCount switch {
-                    0 => null,
-                    1 => variant.Fields
-                        .First(vf => vf.UnionField.Kind is UnionFieldKind.Unmanaged)
-                        .Type.ToFullQualifiedDisplayString(),
-                    _ => $"({string.Join(", ", variant.Fields.Where(vf => vf.UnionField.Kind is UnionFieldKind.Unmanaged).Select(vf => vf.Type.ToFullQualifiedDisplayString()))})",
-                };
-
-                if (unmanagedTupleTypeName is not null) {
-                    writer.WriteLine($"[global::{Literals.FieldOffsetAttribute_TypeName}(0)] {unmanagedTupleTypeName} __{i};");
+                if (variant.UnmanagedTupleTypeName is not null) {
+                    writer.WriteLine($"[global::{Literals.FieldOffsetAttribute_TypeName}(0)] {variant.UnmanagedTupleTypeName} __{i};");
                     i++;
                 }
             }
@@ -140,34 +157,6 @@ partial record StructUnion : IUnion
 
     private unsafe void EmitVariant(IndentedTextWriter writer, Variant variant)
     {
-        // TODO:这些参数在Variant里重新实现了一遍，看看要不要确定改到那边去
-        // EmitInternalUnmanagedUnion里有一份这个的拷贝，记得一起改
-        var parameterListString = string.Join(", ", variant.Fields.Select(field => $"{field.Type.ToFullQualifiedDisplayString()} {field.Name}"));
-        var parameterListString_out = string.Join(", ", variant.Fields.Select(field => $"out {field.Type.ToFullQualifiedDisplayString()} {field.Name}"));
-
-        string? unmanagedTupleTypeName;
-        delegate*<int, string?> unmanagedTupleItemAccess;
-        switch (variant.UnmanagedFieldCount) {
-            case 0:
-                unmanagedTupleTypeName = null;
-                unmanagedTupleItemAccess = default;
-                break;
-            case 1:
-                unmanagedTupleTypeName = variant.Fields
-                    .First(vf => vf.UnionField.Kind is UnionFieldKind.Unmanaged)
-                    .Type.ToFullQualifiedDisplayString();
-                unmanagedTupleItemAccess = &ReturnNull;
-
-                static string? ReturnNull(int index) => null;
-                break;
-            default:
-                unmanagedTupleTypeName = $"({string.Join(", ", variant.Fields.Where(vf => vf.UnionField.Kind is UnionFieldKind.Unmanaged).Select(vf => vf.Type.ToFullQualifiedDisplayString()))})";
-                unmanagedTupleItemAccess = &GetItemAccess;
-
-                static string? GetItemAccess(int tupleItemIndex) => $".Item{tupleItemIndex}";
-                break;
-        }
-
         writer.WriteLineNoTabs($"#region {variant.Name}");
         writer.WriteLine();
 
@@ -175,32 +164,38 @@ partial record StructUnion : IUnion
         writer.WriteLine();
         void EmitCreator()
         {
-            writer.WriteLine($"public static {TypeNameFullQualified} New_{variant.Name}({parameterListString})");
+            var accessibility = (CreatorAccessibility, variant.CreatorAccessibility) switch {
+                (_, CreatorAccessibility.Private) => "private",
+                (_, CreatorAccessibility.Public) => "public",
+                (CreatorAccessibility.Private, _) => "private",
+                _ => "public",
+            };
+
+            writer.WriteLine($"{accessibility} static {TypeNameFullQualified} New_{variant.Name}({variant.ParameterListString})");
             writer.WriteLine("{");
             using (writer.Indent("}")) {
                 // res = new(Tag);
                 writer.WriteLine($"{TypeNameFullQualified} __res = new {TypeNameFullQualified}({TagTypeFullQualifiedName}.{variant.Name});");
 
                 // ref (unmanaged) __unmanageds_local = ref Unsafe.As<>(ref this.__unmanageds);
-                if (unmanagedTupleTypeName is not null) {
-                    writer.WriteLine($"ref {unmanagedTupleTypeName} __unmanageds_local = ref global::{Literals.Unsafe_As_MethodName}<{InternalUnmanagedUnionFullQualifiedTypeName}, {unmanagedTupleTypeName}>(ref __res.__unmanageds);");
+                if (variant.UnmanagedTupleTypeName is not null) {
+                    writer.WriteLine($"ref {variant.UnmanagedTupleTypeName} __unmanageds_local = ref {Code_GetUnmanagedTuple("__res", variant)};");
                 }
 
                 // res.field = param;
                 foreach (var vf in variant.Fields) {
-                    var uf = vf.UnionField;
                     switch (vf.UnionField) {
                         case { Kind: UnionFieldKind.Class, Class_Index: var index }:
                             writer.WriteLine($"__res.__obj{index} = {vf.Name};");
                             break;
                         case { Kind: UnionFieldKind.Unmanaged, Unmanaged_TupleItemIndex: var tupleItemIndex }:
-                            writer.WriteLine($"__unmanageds_local{unmanagedTupleItemAccess(tupleItemIndex)} = {vf.Name};");
+                            writer.WriteLine($"__unmanageds_local{variant.UnmanagedTupleItemAccess(tupleItemIndex)} = {vf.Name};");
                             break;
                         case { Kind: UnionFieldKind.ManagedStruct, ManagedStruct: (var typeIndex, var instanceIndex) }:
                             writer.WriteLine($"__res.__managed{typeIndex}_{instanceIndex} = {vf.Name};");
                             break;
                         default:
-                            break;
+                            throw new InvalidOperationException();
                     }
                 }
 
@@ -214,15 +209,15 @@ partial record StructUnion : IUnion
         writer.WriteLine();
         void EmitTryGetter()
         {
-            writer.WriteLine($"public bool TryGet_{variant.Name}({parameterListString_out})");
+            writer.WriteLine($"public bool TryGet_{variant.Name}({variant.OutParameterListString})");
             writer.WriteLine("{");
             using (writer.Indent("}")) {
                 // true
                 writer.WriteLine($"if (this.__tag == {TagTypeFullQualifiedName}.{variant.Name}) {{");
                 using (writer.Indent("}")) {
                     // ref (unmanaged) __unmanageds_local = ref Unsafe.As<>(ref this.__unmanageds);
-                    if (unmanagedTupleTypeName is not null) {
-                        writer.WriteLine($"ref {unmanagedTupleTypeName} __unmanageds_local = ref global::{Literals.Unsafe_As_MethodName}<{InternalUnmanagedUnionFullQualifiedTypeName}, {unmanagedTupleTypeName}>(ref this.__unmanageds);");
+                    if (variant.UnmanagedTupleTypeName is not null) {
+                        writer.WriteLine($"ref {variant.UnmanagedTupleTypeName} __unmanageds_local = ref {Code_GetUnmanagedTuple("this", variant)};");
                     }
                     // param = res.field
                     foreach (var vf in variant.Fields) {
@@ -234,7 +229,7 @@ partial record StructUnion : IUnion
                                     writer.WriteLine($"{vf.Name} = global::{Literals.Unsafe_As_MethodName}<{vf.Type.ToFullQualifiedDisplayString()}>(this.__obj{index});");
                                 break;
                             case { Kind: UnionFieldKind.Unmanaged, Unmanaged_TupleItemIndex: var tupleItemIndex }:
-                                writer.WriteLine($"{vf.Name} = __unmanageds_local{unmanagedTupleItemAccess(tupleItemIndex)};");
+                                writer.WriteLine($"{vf.Name} = __unmanageds_local{variant.UnmanagedTupleItemAccess(tupleItemIndex)};");
                                 break;
                             case { Kind: UnionFieldKind.ManagedStruct, ManagedStruct: (var typeIndex, var instanceIndex) }:
                                 writer.WriteLine($"{vf.Name} = this.__managed{typeIndex}_{instanceIndex};");
@@ -295,17 +290,17 @@ partial record StructUnion : IUnion
                             }
                             break;
                         case { Kind: UnionFieldKind.Unmanaged, Unmanaged_TupleItemIndex: var tupleItemIndex }:
-                            writer.WriteLine($"public ref {vf.Type.ToFullQualifiedDisplayString()} {vf.Name} {{ get {{ return ref global::{Literals.Unsafe_As_MethodName}<{InternalUnmanagedUnionFullQualifiedTypeName}, {unmanagedTupleTypeName}>(ref __ref.__unmanageds){unmanagedTupleItemAccess(tupleItemIndex)}; }} }}");
+                            writer.WriteLine($"public ref {vf.Type.ToFullQualifiedDisplayString()} {vf.Name} {{ get {{ return ref {Code_GetUnmanagedTuple("this.__ref", variant)}{variant.UnmanagedTupleItemAccess(tupleItemIndex)}; }} }}");
                             break;
                         case { Kind: UnionFieldKind.ManagedStruct, ManagedStruct: (var typeIndex, var instanceIndex) }:
-                            writer.WriteLine($"public ref {vf.Type.ToFullQualifiedDisplayString()} {vf.Name} {{ get {{ return ref __ref.__managed{typeIndex}_{instanceIndex}; }} }}");
+                            writer.WriteLine($"public ref {vf.Type.ToFullQualifiedDisplayString()} {vf.Name} {{ get {{ return ref this.__ref.__managed{typeIndex}_{instanceIndex}; }} }}");
                             break;
                     }
                     writer.WriteLine();
                 }
 
                 // Deconstruct method
-                writer.WriteLine($"public void Deconstruct({parameterListString_out})");
+                writer.WriteLine($"public void Deconstruct({variant.OutParameterListString})");
                 writer.WriteLine($"{{");
                 foreach (var field in variant.Fields) {
                     writer.WriteLine($"    {field.Name} = this.{field.Name};");
@@ -317,7 +312,7 @@ partial record StructUnion : IUnion
             writer.WriteLineNoTabs("#endif");
         }
 
-        writer.WriteLineNoTabs("#endregion");
+        writer.WriteLineNoTabs($"#endregion // {variant.Name}");
     }
 
     private void EmitDisposeMethod(IndentedTextWriter writer)
@@ -351,7 +346,7 @@ partial record StructUnion : IUnion
                                     writer.WriteLine($"((global::{Literals.IDisposable_TypeName})this.__obj{index}).Dispose();");
                                     break;
                                 case { Kind: UnionFieldKind.Unmanaged, Unmanaged_TupleItemIndex: var tupleItemIndex }:
-                                    var fieldAccess = $"global::{Literals.Unsafe_As_MethodName}<{InternalUnmanagedUnionFullQualifiedTypeName}, {variant.UnmanagedTupleTypeName}>(ref this.__unmanageds){variant.UnmanagedTupleItemAccess(tupleItemIndex)}";
+                                    var fieldAccess = $"{Code_GetUnmanagedTuple("this", variant)}{variant.UnmanagedTupleItemAccess(tupleItemIndex)}";
                                     writer.WriteLine($"((global::{Literals.IDisposable_TypeName})({fieldAccess})).Dispose();");
                                     break;
                                 case { Kind: UnionFieldKind.ManagedStruct, ManagedStruct: (var typeIndex, var instanceIndex) }:
@@ -371,21 +366,19 @@ partial record StructUnion : IUnion
         writer.WriteLine($"public TResult Match<TResult>({VariantParameterList()})");
         writer.WriteLine($"{{");
         using (writer.Indent("}")) {
-            writer.WriteLine($"switch ({TagPropertyName}) {{");
-            using (writer.Indent("}")) {
-                foreach (var variant in Variants) {
-                    writer.WriteLine($"case {TagTypeFullQualifiedName}.{variant.Name}: {{");
-                    using (writer.Indent("}")) {
-                        // TODO: 这里用了TryGet，最好是省去Try
-                        writer.WriteLine($"this.TryGet_{variant.Name}({string.Join(", ", variant.Fields.Select((vf, i) => $"out {vf.Type.ToFullQualifiedDisplayString()} __{i}"))});");
-                        writer.WriteLine($"return {variant.Name}.Invoke({string.Join(", ", variant.Fields.Select((_, i) => $"__{i}"))});");
-                    }
-                }
-                writer.WriteLine($"default:");
-                writer.WriteLine($"    if (Default is null)");
-                writer.WriteLine($"        throw new global::System.InvalidOperationException(\"Unknown tagged union case.\");");
-                writer.WriteLine($"    return Default.Invoke();");
-            }
+            EmitSwitchStatement(writer,
+                (writer, variant) =>
+                {
+                    // TODO: 这里用了TryGet，最好是省去Try
+                    writer.WriteLine($"this.TryGet_{variant.Name}({string.Join(", ", variant.Fields.Select((vf, i) => $"out var __{i}"))});");
+                    writer.WriteLine($"return {variant.Name}.Invoke({string.Join(", ", variant.Fields.Select((_, i) => $"__{i}"))});");
+                },
+                writeDefaultCase: writer =>
+                {
+                    writer.WriteLine($"if (Default is null)");
+                    writer.WriteLine($"    throw new global::System.InvalidOperationException(\"Unknown tagged union case.\");");
+                    writer.WriteLine($"return Default.Invoke();");
+                });
         }
 
         string VariantParameterList()
@@ -399,6 +392,119 @@ partial record StructUnion : IUnion
                 return string.Join(", ",
                     variant.Fields.Select(vf => vf.Type.ToFullQualifiedDisplayString())
                         .Append("TResult"));
+            }
+        }
+    }
+
+    private void EmitEqualityComparisonMethods(IndentedTextWriter writer)
+    {
+        writer.WriteLineNoTabs("#region EqualityComparison");
+        writer.WriteLine();
+        // Equals
+        {
+            writer.WriteLine($"public bool Equals({TypeNameFullQualified} other)");
+            writer.WriteLine("{");
+            using (writer.Indent("}")) {
+                writer.WriteLine($"if (this.{TagPropertyName} != other.{TagPropertyName})");
+                writer.WriteLine($"    return false;");
+                writer.WriteLine();
+                EmitSwitchStatement(writer,
+                    (writer, variant) =>
+                    {
+                        if (variant.Fields.Count == 0) {
+                            writer.WriteLine("return true;");
+                            return;
+                        }
+
+                        // TODO: TryGet
+                        writer.WriteLine($"this.TryGet_{variant.Name}({string.Join(", ", variant.Fields.Select(vf => $"out var __this_{vf.Name}"))});");
+                        writer.WriteLine($"other.TryGet_{variant.Name}({string.Join(", ", variant.Fields.Select(vf => $"out var __other_{vf.Name}"))});");
+                        foreach (var statement in variant.Fields.SelectFirstSpecialized(
+                            vf => $"return {Literals.EqualityComparer_TypeName}<{vf.Type.ToFullQualifiedDisplayString()}>.Default.Equals(__this_{vf.Name}, __other_{vf.Name})",
+                            vf => $"    && {Literals.EqualityComparer_TypeName}<{vf.Type.ToFullQualifiedDisplayString()}>.Default.Equals(__this_{vf.Name}, __other_{vf.Name})")) {
+                            writer.WriteLine(statement);
+                        }
+                        writer.WriteLine("    ;");
+                    });
+                writer.WriteLine($"return true;");
+            }
+        }
+        writer.WriteLine();
+
+        // Equals(object)
+        writer.WriteLine($"#nullable disable");
+        writer.WriteLine($"public override bool Equals(object obj) {{ return obj is {TypeNameFullQualified} __t_obj && this.Equals(__t_obj); }}");
+        writer.WriteLine($"#nullable restore");
+
+        writer.WriteLine();
+
+        // operators
+        writer.WriteLine($"public static bool operator ==({TypeNameFullQualified} left, {TypeNameFullQualified} right) {{ return left.Equals(right); }}");
+        writer.WriteLine($"public static bool operator !=({TypeNameFullQualified} left, {TypeNameFullQualified} right) {{ return !(left == right); }}");
+
+        // GetHashCode
+        writer.WriteLine();
+        writer.WriteLine($"public override int GetHashCode()");
+        writer.WriteLine($"{{");
+        using (writer.Indent("}")) {
+            EmitSwitchStatement(writer,
+                (writer, variant) =>
+                {
+                    // TODO: Tryget
+                    writer.WriteLine($"this.TryGet_{variant.Name}({string.Join(", ", variant.Fields.Select(vf => $"out var __this_{vf.Name}"))});");
+                    writer.WriteLineNoTabs("#if NETCOREAPP2_1_OR_GREATER");
+
+                    if (variant.Fields.Count <= 7) {
+                        writer.WriteLine($"return global::{Literals.HashCode_Combine_MethodName}(this.{TagPropertyName}{string.Concat(variant.Fields.Select(vf => $", __this_{vf.Name}"))});");
+                    }
+                    else {
+                        writer.WriteLine($"global::{Literals.HashCode_TypeName} __hc = new global::{Literals.HashCode_TypeName}()");
+                        writer.WriteLine($"__hc.Add(this.{TagPropertyName})");
+                        foreach (var vf in variant.Fields) {
+                            writer.WriteLine($"__hc.Add(__this_{vf.Name});");
+                        }
+                        writer.WriteLine($"return __hc.ToHashCode();");
+                    }
+
+                    writer.WriteLineNoTabs("#else");
+
+                    // Note: I copied from MSDN https://learn.microsoft.com/zh-cn/dotnet/fundamentals/code-analysis/style-rules/ide0070
+                    writer.WriteLine($"int __hc = 339610899;");
+                    writer.WriteLine($"__hc = __hc * -1521134295 + this.{TagPropertyName}.GetHashCode();");
+                    foreach (var vf in variant.Fields) {
+                        writer.WriteLine($"__hc = __hc * -1521134295 + __this_{vf.Name}.GetHashCode();");
+                    }
+                    writer.WriteLine($"return __hc;");
+
+                    writer.WriteLineNoTabs("#endif");
+                },
+                writeDefaultCase: writer =>
+                {
+                    writer.WriteLine($"return this.{TagPropertyName}.GetHashCode();");
+                });
+        }
+
+        writer.WriteLine();
+        writer.WriteLineNoTabs("#endregion // EqualityComparison");
+    }
+
+    private void EmitSwitchStatement(IndentedTextWriter writer,
+        Action<IndentedTextWriter, Variant> writeCase,
+        Action<IndentedTextWriter>? writeDefaultCase = null)
+    {
+        writer.WriteLine($"switch (this.{TagPropertyName}) {{");
+        using (writer.Indent("}")) {
+            foreach (var variant in Variants) {
+                writer.WriteLine($"case {TagTypeFullQualifiedName}.{variant.Name}: {{");
+                using (writer.Indent("}")) {
+                    writeCase(writer, variant);
+                }
+            }
+            if (writeDefaultCase is not null) {
+                writer.WriteLine($"default: {{");
+                using (writer.Indent("}")) {
+                    writeDefaultCase(writer);
+                }
             }
         }
     }

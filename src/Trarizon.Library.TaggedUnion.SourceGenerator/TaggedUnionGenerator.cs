@@ -1,5 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Trarizon.Library.TaggedUnion.SourceGenerator.Core.Datas;
 
 namespace Trarizon.Library.TaggedUnion.SourceGenerator;
 [Generator(LanguageNames.CSharp)]
@@ -10,7 +11,7 @@ internal sealed partial class TaggedUnionGenerator : IIncrementalGenerator
         var res = context.SyntaxProvider.ForAttributeWithMetadataName(
             Literals.UnionTagAttribute_TypeName,
             (node, token) => node is EnumDeclarationSyntax,
-            ParseUnionTag)
+            UnionTagData.Parse)
             .Select((res, token) => res.Select(v => v.Build()));
 
         context.RegisterSourceOutput(res, (context, res) =>

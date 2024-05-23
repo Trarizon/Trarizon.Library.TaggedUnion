@@ -12,13 +12,20 @@ internal static class Literals
 
     public const int UnionTagAttribute_UnionTypeName_CtorIndex = 0;
     public const string ITaggedUnionGeneration_Options_PropertyIdentifier = "Options";
+    public const string CreatorAccessibility_PropertyIdentifier = "CreatorAccessibility";
 
     public const string IDisposable_TypeName = $"System.IDisposable";
+    public const string IEquatable_TypeName = $"System.IEquatable";
     public const string Func_TypeName = $"System.Func";
+    public const string IEqualityOperators_TypeName = $"System.Numerics.IEqualityOperators";
+    public const string HashCode_TypeName = $"System.HashCode";
+    public const string HashCode_Combine_MethodName = $"{HashCode_TypeName}.Combine";
+    public const string EqualityComparer_TypeName = $"System.Collections.Generic.EqualityComparer";
 
     private const string Unsafe_TypeName = "System.Runtime.CompilerServices.Unsafe";
     private const string Unsafe_As_MethodIdentifier = "As";
     public const string Unsafe_As_MethodName = $"{Unsafe_TypeName}.{Unsafe_As_MethodIdentifier}";
+    public const string Unsafe_SkipInit_MethodName = $"{Unsafe_TypeName}.SkipInit";
 
     private const string InteropServices_NamespaceName = "System.Runtime.InteropServices";
     public const string FieldOffsetAttribute_TypeName = $"{InteropServices_NamespaceName}.FieldOffsetAttribute";

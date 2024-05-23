@@ -1,13 +1,18 @@
 ﻿using Microsoft.CodeAnalysis;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using Trarizon.Library.TaggedUnion.SourceGenerator.Core.Mirror;
+using Trarizon.Library.TaggedUnion.SourceGenerator.Utilities;
 
 namespace Trarizon.Library.TaggedUnion.SourceGenerator.Core.Datas;
-internal sealed record TagVariantData(IFieldSymbol EnumField, ImmutableArray<(ITypeSymbol Type, string Identifier)> Fields)
+internal sealed record TagVariantData(IFieldSymbol EnumField, IReadOnlyCollection<(ITypeSymbol Type, string Identifier)> Fields)
 {
-    public TagVariantData(IFieldSymbol EnumField) : this(EnumField, ImmutableArray<(ITypeSymbol Type, string Identifier)>.Empty) { }
+    public CreatorAccessibility CreatorAccessibility { get; init; }
 
-    public static TagVariantData? From(AttributeData attribute, IFieldSymbol enumField)
+    public TagVariantData(IFieldSymbol EnumField) : this(EnumField, []) { }
+
+    public static TagVariantData? FromAttribute(AttributeData attribute, IFieldSymbol enumField)
     {
         var ctorArgs = attribute.ConstructorArguments;
         if (attribute.AttributeClass is not { } attr)
@@ -23,7 +28,9 @@ internal sealed record TagVariantData(IFieldSymbol EnumField, ImmutableArray<(IT
                         enumField,
                         arg0.Values
                             .Select((tc, i) => ((ITypeSymbol)tc.Value!, DefaultVariantFieldIdentifier(i)))
-                            .ToImmutableArray());
+                            .ToImmutableArray()) {
+                        CreatorAccessibility = attribute.GetNamedArgument<CreatorAccessibility>(Literals.CreatorAccessibility_PropertyIdentifier).Value,
+                    };
                 // (Type[], string?[]?)
                 case [{ Kind: TypedConstantKind.Array } arg0, { Kind: TypedConstantKind.Array } arg1]
                 when ((IArrayTypeSymbol)arg0.Type!).ElementType.ToDisplayString() is "System.Type" &&
@@ -33,7 +40,9 @@ internal sealed record TagVariantData(IFieldSymbol EnumField, ImmutableArray<(IT
                         arg0.Values.Zip(
                             arg1.Values.Select((tc, i) => tc.IsNull ? DefaultVariantFieldIdentifier(i) : (string)tc.Value!),
                             (tc0, v1) => ((ITypeSymbol)tc0.Value!, v1))
-                            .ToImmutableArray());
+                            .ToImmutableArray()) {
+                        CreatorAccessibility = attribute.GetNamedArgument<CreatorAccessibility>(Literals.CreatorAccessibility_PropertyIdentifier).Value,
+                    };
                 // (Type, string, ...)
                 case { } when IsAlternatingTypeStringParameters(ctorArgs):
                     var builder = ImmutableArray.CreateBuilder<(ITypeSymbol, string)>(ctorArgs.Length / 2);
@@ -44,7 +53,9 @@ internal sealed record TagVariantData(IFieldSymbol EnumField, ImmutableArray<(IT
                     }
                     return new TagVariantData(
                         enumField,
-                        builder.ToImmutable());
+                        builder.ToImmutable()) {
+                        CreatorAccessibility = attribute.GetNamedArgument<CreatorAccessibility>(Literals.CreatorAccessibility_PropertyIdentifier).Value,
+                    };
                 default:
                     return null;
             }
@@ -59,7 +70,9 @@ internal sealed record TagVariantData(IFieldSymbol EnumField, ImmutableArray<(IT
                 enumField,
                 typeArguments
                     .Zip(ctorArgStrs, (type, arg) => (type, arg))
-                    .ToImmutableArray());
+                    .ToImmutableArray()) {
+                CreatorAccessibility = attribute.GetNamedArgument<CreatorAccessibility>(Literals.CreatorAccessibility_PropertyIdentifier).Value,
+            };
         }
 
         static string DefaultVariantFieldIdentifier(int index) => $"Item{index + 1}";

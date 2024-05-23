@@ -18,6 +18,11 @@ public sealed class UnionTagAttribute(string? unionTypeName = null) : Attribute,
     /// </remarks>
     public string? UnionTypeName => unionTypeName;
 
+    /// <summary>
+    /// Set access modifiers of New_Variant() to private
+    /// </summary>
+    public Accessibility CreatorAccessibility { get; set; }
+
     /// <inheritdoc/>
     public TaggedUnionGenerationOptions Options { get; set; }
 }

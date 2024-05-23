@@ -13,13 +13,13 @@ internal sealed partial record StructUnion(
     string TagTypeFullQualifiedName,
     IReadOnlyList<Variant> Variants)
 {
-
     public required int ObjectFieldCount { get; init; }
 
     public required bool ContainsUnmanaged { get; init; }
 
     public required IReadOnlyDictionary<ITypeSymbol, (int TypeIndex, int Count)> ManagedFields { get; init; }
 
+    public CreatorAccessibility CreatorAccessibility { get; init; }
 
     public TaggedUnionGenerationOptions GenerationOptions { get; init; }
 

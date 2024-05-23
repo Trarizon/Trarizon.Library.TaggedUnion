@@ -5,20 +5,32 @@ namespace Trarizon.Library.TaggedUnion.Attributes;
 /// Provide variant infos to extend a enum field to variant
 /// </summary>
 /// <param name="types">Types of variant fields</param>
+/// <param name="identifiers">Field identifiers</param>
 [AttributeUsage(AttributeTargets.Field)]
-public class TagVariantAttribute(params Type[] types) : Attribute
+public class TagVariantAttribute(Type[] types, string?[]? identifiers) : Attribute
 {
     /// <summary>
     /// Types of variant fields
     /// </summary>
     public Type[] Types => types;
+
     /// <summary>
     /// Custom identifiers of variant fields
     /// </summary>
-    public string?[]? Identifiers { get; set; }
+    public string?[]? Identifiers => identifiers;
 
-    internal TagVariantAttribute(Type[] types, string?[]? identifiers) : this(types)
-        => Identifiers = identifiers;
+    /// <summary>
+    /// Set access modifiers of New_Variant() to private
+    /// </summary>
+    public Accessibility CreatorAccessibility { get; set; }
+
+    /// <summary>
+    /// Create a variant with default field identifiers
+    /// </summary>
+    /// <param name="types">Types of variant fields</param>
+    public TagVariantAttribute(params Type[] types) : this(types, null) { }
+
+    #region Constructors
 
     /// <summary>
     /// Create a variant with 1 field,
@@ -75,6 +87,8 @@ public class TagVariantAttribute(params Type[] types) : Attribute
     public TagVariantAttribute(Type type1, string? identifier1, Type type2, string? identifier2, Type type3, string? identifier3, Type type4, string? identifier4, Type type5, string? identifier5, Type type6, string? identifier6, Type type7, string? identifier7, Type type8, string? identifier8)
         : this([type1, type2, type3, type4, type5, type6, type7, type8], [identifier1, identifier2, identifier3, identifier4, identifier5, identifier6, identifier7, identifier8])
     { }
+
+    #endregion
 }
 
 
